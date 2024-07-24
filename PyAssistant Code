@@ -1,0 +1,212 @@
+import speech_recognition as sr
+import pyttsx3
+import datetime
+import webbrowser
+import subprocess
+import requests
+from googletrans import Translator
+import os 
+
+recognizer = sr.Recognizer()
+tts_engine = pyttsx3.init()
+
+# API Keys 
+WEATHER_API_KEY = '4754e45f4089be99257ccc4b13a1b5bb'
+WOLFRAM_API_KEY = '77d54438bc92b77dba9ea3150d4db1db'
+
+# Functions for speak the text
+def speak(text):
+    print(f"PyAssistant: {text}")
+    tts_engine.say(text)
+    tts_engine.runAndWait()
+
+# Functions used to listen commands from user
+def listen():
+    with sr.Microphone() as source:
+        print("Listening...")
+        recognizer.adjust_for_ambient_noise(source)
+        audio = recognizer.listen(source)
+        try:
+            command = recognizer.recognize_google(audio)
+            print(f"User: {command}\n")
+            return command.lower()
+        except sr.UnknownValueError:
+            response = "Sorry, I didn't understand that."
+            speak(response)
+            return ""
+        except sr.RequestError:
+            response = "Sorry, my speech service is unavailable."
+            speak(response)
+            return ""
+
+# Functions to retrieve weather information
+def get_weather_info(city):
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city},in&appid={WEATHER_API_KEY}&units=metric"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        
+        weather_data = response.json()
+        temp = weather_data['main']['temp']
+        description = weather_data['weather'][0]['description']
+        humidity = weather_data['main']['humidity']
+        feels_like = weather_data['main']['feels_like']
+        
+        weather_info = (f"Currently in {city}, India, the temperature is {temp:.1f}°C, but it feels like {feels_like:.1f}°C. "
+                        f"The weather conditions are described as {description}, with a humidity of {humidity}%.")
+        
+        return weather_info
+    except requests.RequestException:
+        return f"I'm sorry, but I couldn't retrieve the weather information for {city}, India."
+
+# Other functions for different commands
+def tell_time():
+    now = datetime.datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    response = f"The time is now {current_time}"
+    speak(response)
+
+def tell_date():
+    now = datetime.datetime.now()
+    current_date = now.strftime("%d-%m-%Y")
+    response = f"Today's date is {current_date}"
+    speak(response)
+
+def search_web(query):
+    url = f"https://www.google.com/search?q={query}"
+    webbrowser.open(url)
+    response = f"Here are the best search results for {query}"
+    speak(response)
+
+def open_app(app_name):
+    try:
+        if app_name == 'notepad':
+            subprocess.Popen(['notepad.exe'])
+        elif app_name == 'calculator':
+            subprocess.Popen(['calc.exe'])
+        else:
+            subprocess.Popen([app_name])
+        response = f"Opening {app_name}"
+        speak(response)
+    except FileNotFoundError:
+        response = "Sorry, I unable find that application."
+        speak(response)
+    except Exception as e:
+        response = "An error is occurred while trying to open the application."
+        speak(response)
+        print(e)
+
+def send_email(to_address, subject, message):
+    try:
+        #  for email sending
+        response = f"Sending email to {to_address} with the subject {subject}"
+        speak(response)
+    except Exception as e:
+        response = "Sorry, I unable to send the email."
+        speak(response)
+        print(e)
+
+def answer_question(query):
+    url = f"http://api.wolframalpha.com/v2/query?input={query}&appid={WOLFRAM_API_KEY}&output=json"
+    response = requests.get(url)
+    if response.status_code == 200:
+        result = response.json()
+        try:
+            answer = result['queryresult']['pods'][1]['subpods'][0]['plaintext']
+            response = answer
+            speak(response)
+        except (IndexError, KeyError):
+            response = "I'm Sorry, I unable to find an answer of your question."
+            speak(response)
+    else:
+        response = "Sorry, I didn't get the answer."
+        speak(response)
+
+def translate_to_hindi(text):
+    translator = Translator()
+    translation = translator.translate(text, dest='hi')
+    response = translation.text
+    speak(response)
+
+def translate_sentence(sentence, target_language):
+    translator = Translator()
+    translation = translator.translate(sentence, dest=target_language)
+    response = translation.text
+    speak(response)
+
+wishlist = []
+
+def manage_wishlist(command, item=None):
+    global wishlist
+    if 'add' in command:
+        wishlist.append(item)
+        response = f"{item} is added to your wishlist."
+        speak(response)
+    elif 'remove' in command:
+        try:
+            wishlist.remove(item)
+            response = f"{item}is  removed from your wishlist."
+            speak(response)
+        except ValueError:
+            response = f"{item} is not in your wishlist."
+            speak(response)
+    elif 'show' in command:
+        if wishlist:
+            response = "Your wishlist contains: " + ", ".join(wishlist)
+            speak(response)
+        else:
+            response = "Your wishlist is empty."
+            speak(response)
+
+def handle_command(command):
+    if "hello" in command:
+        response = "Hello! How can I assist you today?"
+        speak(response)
+    elif "time" in command:
+        tell_time()
+    elif "date" in command:
+        tell_date()
+    elif "search for" in command:
+        query = command.replace("search for", "").strip()
+        search_web(query)
+    elif "open" in command:
+        app_name = command.replace("open", "").strip()
+        open_app(app_name)
+    elif "send email" in command:
+        send_email("preetifartyal13@gmail.com", "Contact me", "Write a test message.")
+    elif "weather" in command:
+        city = command.replace("weather in", "").replace("weather of", "").strip()
+        weather_info = get_weather_info(city)
+        speak(weather_info)
+    elif "question" in command:
+        question = command.replace("question", "").strip()
+        answer_question(question)
+    elif "translate" in command:
+        sentence = command.replace("translate", "").strip()
+        translate_sentence(sentence, 'es')  # taking an example by translating to Spanish 
+    elif "hindi meaning of" in command:
+        text = command.replace("hindi meaning of", "").strip()
+        translate_to_hindi(text)
+    elif "added to your wishlist"in command:
+        item = command.replace("add to wishlist", "").strip()
+        manage_wishlist('add', item)
+    elif "removed from your wishlist" in command:
+        item = command.replace("remove from wishlist", "").strip()
+        manage_wishlist('remove', item)
+    elif "show my wishlist" in command:
+        manage_wishlist('show')
+    else:
+        response = "Sorry, I unable to perform that task yet."
+        speak(response)
+
+def main():
+    speak("I'm your  personal voice assistant. How can I assist you ?")
+    while True:
+        command = listen()
+        if "exit" in command or "quit" in command:
+            speak("Goodbye! Have a nice day")
+            break
+        handle_command(command)
+
+if __name__ == "__main__":
+    main()
